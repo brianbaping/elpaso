@@ -11,6 +11,10 @@ confluence:
   spaces:
     - ISS
 
+github:
+  repo_prefix: "mes-"
+  issue_lookback_months: 12
+
 chunking:
   chunk_size: 512
   chunk_overlap: 50

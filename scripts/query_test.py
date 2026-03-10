@@ -46,14 +46,18 @@ def main():
 
     for i, result in enumerate(results, 1):
         score = result.get("score", 0)
-        title = result.get("page_title", "unknown")
+        title = result.get("page_title") or result.get("title") or result.get("repo_name", "unknown")
         heading = result.get("heading_context", "")
         source = result.get("source_type", "unknown")
-        url = result.get("page_url", "")
+        url = result.get("page_url") or result.get("repo_url", "")
+        repo = result.get("repo_name", "")
+        file_path = result.get("file_path", "")
         text = result.get("text", "")
 
         print(f"--- Result {i} (score: {score:.4f}) ---")
         print(f"Source: [{source}] {title}")
+        if repo and file_path:
+            print(f"File: {repo}/{file_path}")
         if heading:
             print(f"Section: {heading}")
         if url:
