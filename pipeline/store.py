@@ -3,7 +3,7 @@
 import uuid
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, FieldCondition, Filter, MatchAny, PointStruct, VectorParams
+from qdrant_client.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, PointStruct, VectorParams
 
 
 class VectorStore:
@@ -50,21 +50,43 @@ class VectorStore:
         )
         return len(points)
 
+    def delete_by_filter(self, **field_matches) -> None:
+        """Delete points matching exact field values."""
+        conditions = [
+            FieldCondition(key=k, match=MatchValue(value=v))
+            for k, v in field_matches.items()
+        ]
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=Filter(must=conditions),
+        )
+
+    def delete_collection(self) -> None:
+        """Drop the entire collection."""
+        self.client.delete_collection(self.collection_name)
+
     def search(
         self, query_vector: list[float], top_k: int = 5,
         source_types: list[str] | None = None,
+        repo_name: str = "",
+        space_key: str = "",
     ) -> list[dict]:
-        """Search for similar vectors, optionally filtered by source_type."""
-        query_filter = None
+        """Search for similar vectors with optional filters."""
+        conditions = []
         if source_types:
-            query_filter = Filter(
-                must=[
-                    FieldCondition(
-                        key="source_type",
-                        match=MatchAny(any=source_types),
-                    )
-                ]
+            conditions.append(
+                FieldCondition(key="source_type", match=MatchAny(any=source_types))
             )
+        if repo_name:
+            conditions.append(
+                FieldCondition(key="repo_name", match=MatchValue(value=repo_name))
+            )
+        if space_key:
+            conditions.append(
+                FieldCondition(key="space_key", match=MatchValue(value=space_key))
+            )
+
+        query_filter = Filter(must=conditions) if conditions else None
 
         results = self.client.query_points(
             collection_name=self.collection_name,

@@ -1,20 +1,48 @@
 """Retrieval and synthesis pipeline — search Qdrant, synthesize with Qwen3."""
 
+import logging
 import os
+import time
 
 import requests
 import yaml
 
 from pipeline.embedder import Embedder
+from pipeline.logger import get_logger, log_with_data
 from pipeline.store import VectorStore
 from mcp_server.prompts import SYSTEM_PROMPT, build_synthesis_prompt
 
+logger = get_logger("el_paso.retriever")
 
 SCOPE_MAP = {
     "code": ["github_code"],
     "docs": ["confluence", "github_docs", "github_issue", "github_pr"],
     "all": None,
 }
+
+
+def _deduplicate_chunks(chunks: list[dict], similarity_threshold: float = 0.95) -> list[dict]:
+    """Remove near-duplicate chunks based on text overlap."""
+    if not chunks:
+        return chunks
+
+    seen_texts: list[str] = []
+    unique: list[dict] = []
+
+    for chunk in chunks:
+        text = chunk.get("text", "")
+        is_dup = False
+        for seen in seen_texts:
+            # Simple overlap check: if >80% of shorter text is contained in longer
+            shorter, longer = (text, seen) if len(text) <= len(seen) else (seen, text)
+            if shorter and shorter in longer:
+                is_dup = True
+                break
+        if not is_dup:
+            seen_texts.append(text)
+            unique.append(chunk)
+
+    return unique
 
 
 class Retriever:
@@ -57,14 +85,28 @@ class Retriever:
         resp.raise_for_status()
         return resp.json().get("message", {}).get("content", "")
 
-    def ask(self, question: str, scope: str = "all") -> str:
-        """Full pipeline: embed → search → synthesize → return answer."""
+    def ask(self, question: str, scope: str = "all", repo: str = "", space: str = "") -> str:
+        """Full pipeline: embed → search → deduplicate → synthesize → return answer."""
+        start = time.time()
         source_types = SCOPE_MAP.get(scope, None)
 
-        # Retrieve relevant chunks
+        # Retrieve relevant chunks (fetch extra to account for dedup)
         query_vector = self.embedder.embed(question)
-        chunks = self.store.search(
-            query_vector, top_k=self.top_k, source_types=source_types
+        raw_chunks = self.store.search(
+            query_vector,
+            top_k=self.top_k + 4,
+            source_types=source_types,
+            repo_name=repo,
+            space_key=space,
+        )
+
+        # Deduplicate and trim to top_k
+        chunks = _deduplicate_chunks(raw_chunks)[:self.top_k]
+
+        log_with_data(
+            logger, logging.INFO, "Query executed",
+            question=question, scope=scope, repo=repo, space=space,
+            raw_results=len(raw_chunks), deduped_results=len(chunks),
         )
 
         if not chunks:
@@ -73,5 +115,11 @@ class Retriever:
         # Synthesize answer
         user_prompt = build_synthesis_prompt(question, chunks)
         answer = self._call_llm(SYSTEM_PROMPT, user_prompt)
+
+        elapsed = time.time() - start
+        log_with_data(
+            logger, logging.INFO, "Answer synthesized",
+            question=question, elapsed_seconds=round(elapsed, 2),
+        )
 
         return answer

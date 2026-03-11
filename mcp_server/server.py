@@ -33,7 +33,12 @@ def _get_retriever():
 
 
 @mcp.tool()
-def ask_el_paso(question: str, scope: str = "all") -> str:
+def ask_el_paso(
+    question: str,
+    scope: str = "all",
+    repo: str = "",
+    space: str = "",
+) -> str:
     """Ask El Paso about Ping's software systems, architecture, and processes.
 
     Searches across Confluence docs, GitHub repos, issues, PRs, and C# source
@@ -42,12 +47,14 @@ def ask_el_paso(question: str, scope: str = "all") -> str:
     Args:
         question: Your question about the codebase, architecture, or processes
         scope: Filter sources - "all" (default), "code" (source code only), "docs" (documentation only)
+        repo: Filter to a specific GitHub repo name (e.g. "mes-shipping-service")
+        space: Filter to a specific Confluence space key (e.g. "ISS")
     """
     if scope not in ("all", "code", "docs"):
         return f"Invalid scope '{scope}'. Use 'all', 'code', or 'docs'."
 
     retriever = _get_retriever()
-    return retriever.ask(question, scope=scope)
+    return retriever.ask(question, scope=scope, repo=repo, space=space)
 
 
 if __name__ == "__main__":

@@ -18,5 +18,9 @@ build/
 .vscode/
 .idea/
 
+# El Paso state
+ingestion_state.json
+logs/
+
 # OS
 .DS_Store

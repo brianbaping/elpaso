@@ -158,6 +158,8 @@ class TestRetriever:
 
         mock_store.search.assert_called_once_with(
             mock_embedder.embed.return_value,
-            top_k=5,
+            top_k=9,
             source_types=["github_code"],
+            repo_name="",
+            space_key="",
         )

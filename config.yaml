@@ -28,4 +28,4 @@ chunking:
   chunk_overlap: 50
 
 retrieval:
-  top_k: 5
+  top_k: 8
